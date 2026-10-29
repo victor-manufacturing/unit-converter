@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unit Converter – math tests</title>
+<style>
+  :root { --ink:#1F2328; --steel:#5A626C; --line:#CDD2D8; --panel:#FFFFFF; --page:#EEF0F2; --pass:#1E7B34; --fail:#B3261E; --red:#C1272D;
+    color-scheme: light; box-sizing: border-box; padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink:#ECEEF0; --steel:#A8B0B9; --line:#3B4148; --panel:#1E2226; --page:#15181B; --pass:#7BD88F; --fail:#FF8A80; color-scheme: dark; } }
+  :root[data-theme="dark"] { --ink:#ECEEF0; --steel:#A8B0B9; --line:#3B4148; --panel:#1E2226; --page:#15181B; --pass:#7BD88F; --fail:#FF8A80; color-scheme: dark; }
+  *,*::before,*::after { box-sizing: inherit; }
+  body { margin:0; background:var(--page); color:var(--ink); font-family:"Bahnschrift","DIN Alternate","Roboto Condensed",system-ui,sans-serif; line-height:1.45; }
+  main { max-width:44rem; margin:0 auto; padding:1.25rem 1rem 2rem; }
+  h1 { margin:0 0 0.25rem; font-size:1.5rem; border-bottom:4px solid var(--red); padding-bottom:0.5rem; }
+  p { color:var(--steel); max-width:60ch; }
+  .pick { display:inline-flex; align-items:center; min-height:52px; padding:0 1.25rem; font-weight:700; border:2px solid var(--ink); border-radius:6px; background:var(--panel); cursor:pointer; }
+  .pick:focus-within { outline:3px solid #1A5FB4; outline-offset:2px; }
+  .pick input { position:absolute; opacity:0; width:1px; height:1px; }
+  #result { margin-top:1.25rem; padding:1rem; border-radius:6px; background:var(--panel); border:1px solid var(--line); border-left-width:6px; font-size:1.15rem; font-weight:700; }
+  #result.pass { border-left-color:var(--pass); color:var(--pass); }
+  #result.fail { border-left-color:var(--fail); color:var(--fail); }
+  #result:empty { display:none; }
+  ul { padding-left:1.1rem; } li { margin:0.2rem 0; overflow-wrap:anywhere; }
+  .f { color:var(--fail); } .s { color:var(--steel); font-size:0.9rem; }
+  details { margin-top:1rem; } summary { cursor:pointer; min-height:44px; display:flex; align-items:center; font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Unit Converter – math tests</h1>
+  <p>Choose the app’s <strong>index.html</strong> file. The tests run on this device in the browser; nothing is uploaded.</p>
+  <label class="pick">Choose index.html<input type="file" id="file" accept=".html,text/html"></label>
+  <div id="result" role="status" aria-live="polite"></div>
+  <div id="failures"></div>
+  <details id="all" hidden><summary>Show every check</summary><ul id="allList" class="s"></ul></details>
+</main>
+<script>
+function runTests(html) {
+  const results = [];
+  function check(name, ok, detail = "") { results.push({ name, ok: !!ok, detail }); }
+  const close = (a, b, rel = 1e-12) => Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b)) * rel;
+  const start = html.indexOf("/* ===== Conversion math");
+  const end = html.indexOf("/* ===== UI =====");
+  if (start < 0 || end < 0) return { error: "This file doesn’t contain the converter’s math section. Choose the app’s index.html." };
+  let M;
+  try { M = new Function(html.slice(start, end) + "\nreturn { QUANTITIES, parseInput, convert, format2, formatN };")(); }
+  catch (e) { return { error: "The math code could not run: " + e.message }; }
+  const { QUANTITIES, parseInput, convert, format2, formatN } = M;
+  const Q = id => QUANTITIES.find(q => q.id === id);
+  const show = (id, v, from, to) => format2(convert(Q(id), v, from, to));
+  const console = { log() {} };
+/* A1. Test-plan values, both directions */
+  const planCases = [
+    ["length", 10, "in", "mm", "254.00"],      ["length", 254, "mm", "in", "10.00"],
+    ["force", 50, "lbf", "N", "222.41"],       ["force", 222.41, "N", "lbf", "50.00"],
+    ["stress", 1000, "psi", "MPa", "6.89"],    ["stress", 6.89, "MPa", "psi", "999.31"],
+    ["area", 1, "in²", "mm²", "645.16"],       ["area", 645.16, "mm²", "in²", "1.00"],
+    ["energy", 1, "lbf·in", "N·mm", "112.98"], ["energy", 112.98, "N·mm", "lbf·in", "1.00"],
+    ["speed", 1, "in/min", "mm/min", "25.40"], ["speed", 25.4, "mm/min", "in/min", "1.00"],
+    ["length", 0, "in", "mm", "0.00"],
+  ];
+  planCases.forEach(([id, v, f, t, exp]) => {
+    const got = show(id, v, f, t);
+    check(`${v} ${f} -> ${t}`, got === exp, `expected ${exp}, got ${got}`);
+  });
+  
+  /* A2. Independent reference values (typed in from published definitions, not from the app) */
+  const refs = [
+    ["force", "kN", "N", 1000], ["force", "kgf", "N", 9.80665], ["force", "kip", "N", 4448.2216152605],
+    ["force", "gf", "N", 0.00980665], ["force", "lbf", "kgf", 0.45359237],
+    ["length", "ft", "mm", 304.8], ["length", "yd", "mm", 914.4], ["length", "mi", "mm", 1609344],
+    ["length", "km", "mm", 1e6], ["length", "µm", "mm", 0.001], ["length", "cm", "mm", 10], ["length", "m", "mm", 1000],
+    ["stress", "psi", "MPa", 0.006894757293168], ["stress", "ksi", "MPa", 6.894757293168],
+    ["stress", "bar", "MPa", 0.1], ["stress", "kgf/mm²", "MPa", 9.80665], ["stress", "kgf/cm²", "MPa", 0.0980665],
+    ["stress", "N/mm²", "MPa", 1], ["stress", "GPa", "MPa", 1000], ["stress", "kPa", "MPa", 0.001], ["stress", "Pa", "MPa", 1e-6],
+    ["area", "in²", "mm²", 645.16], ["area", "ft²", "mm²", 92903.04], ["area", "cm²", "mm²", 100], ["area", "m²", "mm²", 1e6],
+    ["energy", "lbf·in", "N·mm", 112.9848290276], ["energy", "ft·lbf", "J", 1.3558179483314],
+    ["energy", "J", "N·mm", 1000], ["energy", "N·m", "J", 1], ["energy", "kJ", "J", 1000],
+    ["energy", "kgf·m", "J", 9.80665], ["energy", "kgf·cm", "N·mm", 98.0665],
+    ["speed", "in/min", "mm/min", 25.4], ["speed", "mm/s", "mm/min", 60], ["speed", "m/s", "mm/min", 60000],
+    ["speed", "in/s", "mm/min", 1524], ["speed", "ft/min", "mm/min", 304.8], ["speed", "m/min", "mm/min", 1000], ["speed", "cm/min", "mm/min", 10],
+  ];
+  refs.forEach(([id, f, t, exp]) => {
+    const got = convert(Q(id), 1, f, t);
+    check(`1 ${f} = ${exp} ${t}`, close(got, exp, 1e-10), `got ${got}`);
+  });
+  
+  /* A3. Every unit pair: reverse uses the inverse factor (full-precision round trip) */
+  let pairs = 0;
+  QUANTITIES.forEach(q => q.units.forEach(a => q.units.forEach(b => {
+    pairs++;
+    [123.456, -7.5, 0.001].forEach(v => {
+      const back = convert(q, convert(q, v, a.u, b.u), b.u, a.u);
+      check(`${q.id} ${a.u}<->${b.u} round trip ${v}`, close(back, v, 1e-12), `got ${back}`);
+    });
+  })));
+  console.log(`  (round-trip checked on ${pairs} unit pairs)`);
+  
+  /* A4. Negatives convert symmetrically; zero stays zero */
+  QUANTITIES.forEach(q => q.units.forEach(a => q.units.forEach(b => {
+    check(`${q.id} ${a.u}->${b.u} negative`, convert(q, -5, a.u, b.u) === -convert(q, 5, a.u, b.u));
+    check(`${q.id} ${a.u}->${b.u} zero`, format2(convert(q, 0, a.u, b.u)) === "0.00");
+  })));
+  
+  /* A5. Display rounding */
+  [[0, "0.00"], [1.005, "1.01"], [2.675, "2.68"], [1.004999, "1.00"], [-1.005, "-1.01"],
+   [-0.004, "0.00"], [-0.005, "-0.01"], [123456789.125, "123456789.13"], [0.1 + 0.2, "0.30"]]
+    .forEach(([x, exp]) => check(`format2(${x})`, format2(x) === exp, `got ${format2(x)}`));
+  check("format2(NaN) is blank", format2(NaN) === "");
+  check("format2(Infinity) is blank", format2(Infinity) === "");
+  
+  /* A5b. Selectable decimal places (0-6) */
+[[1234.5, 0, "1235"], [-1234.5, 0, "-1235"], [0.04, 0, "0"], [-0.4, 0, "0"], [222.411080763, 1, "222.4"],
+ [222.411080763, 3, "222.411"], [6.894757293168, 4, "6.8948"], [6.894757293168, 6, "6.894757"],
+ [1.0005, 3, "1.001"], [0, 4, "0.0000"], [0, 0, "0"], [-0.00004, 4, "0.0000"], [112.9848290276, 5, "112.98483"]]
+  .forEach(([x, dp, exp]) => check(`formatN(${x}, ${dp})`, formatN(x, dp) === exp, `got ${formatN(x, dp)}`));
+for (let dp = 0; dp <= 6; dp++) {
+  const s = formatN(convert(Q("force"), 50, "lbf", "N"), dp);
+  check(`${dp} decimals gives ${dp} digits after the point`, dp === 0 ? !s.includes(".") : s.split(".")[1].length === dp, s);
+}
+
+/* A6. Input parsing */
+  const P = s => parseInput(s);
+  [["", "empty"], ["   ", "empty"], ["-", "partial"], [".", "partial"], ["-.", "partial"], ["+", "partial"],
+   ["12", "ok"], ["12.5", "ok"], [".5", "ok"], ["5.", "ok"], ["-3.2", "ok"], [" 7 ", "ok"], ["0", "ok"],
+   ["abc", "invalid"], ["1,000", "invalid"], ["1,5", "invalid"], ["1.2.3", "invalid"], ["12abc", "invalid"],
+   ["Infinity", "invalid"], ["NaN", "invalid"], ["1e5", "invalid"], ["--5", "invalid"], ["9999999999999", "invalid"]]
+    .forEach(([s, exp]) => check(`parse "${s}" -> ${exp}`, P(s).state === exp, `got ${P(s).state}`));
+  check('parse "12.5" value', P("12.5").value === 12.5);
+  
+  /* A7. Fuzz: no visible NaN/Infinity whatever is typed */
+  const chars = "0123456789.-+,eE abcxyz∞";
+  for (let i = 0; i < 5000; i++) {
+    let s = ""; const n = 1 + Math.floor(Math.random() * 8);
+    for (let j = 0; j < n; j++) s += chars[Math.floor(Math.random() * chars.length)];
+    const p = P(s);
+    if (p.state === "ok") {
+      const out = show("force", p.value, "lbf", "N");
+      if (/NaN|Infinity/.test(out)) check(`fuzz "${s}"`, false, out);
+    }
+  }
+  check("fuzz 5000 random inputs", true);
+  
+  
+  return { results };
+}
+
+const out = document.getElementById("result");
+document.getElementById("file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => render(runTests(String(r.result)), f.name);
+  r.readAsText(f);
+});
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+function render(res, name) {
+  const fails = document.getElementById("failures"), all = document.getElementById("all"), list = document.getElementById("allList");
+  fails.innerHTML = ""; list.innerHTML = "";
+  if (res.error) { out.className = "fail"; out.textContent = res.error; all.hidden = true; return; }
+  const bad = res.results.filter(x => !x.ok);
+  out.className = bad.length ? "fail" : "pass";
+  out.textContent = bad.length
+    ? `${bad.length} of ${res.results.length} checks failed (${name})`
+    : `All ${res.results.length} checks passed (${name})`;
+  if (bad.length) fails.innerHTML = "<ul>" + bad.map(x => `<li class="f">${esc(x.name)} ${esc(x.detail)}</li>`).join("") + "</ul>";
+  list.innerHTML = res.results.map(x => `<li>${x.ok ? "✓" : "✗"} ${esc(x.name)}</li>`).join("");
+  all.hidden = false;
+}
+</script>
+</body>
+</html>
